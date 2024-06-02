@@ -1,0 +1,723 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.25.6/d3-legend.min.js"></script>
+    <script src="./movie.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@popperjs/core@2"></script>
+
+
+    <title>IMDB Top 1000 Movies Visualization</title>
+    <style>
+        #svg {
+            margin: auto;
+            display: block;
+        }
+
+        .navbar-brand {
+            font-family: 'Playfair Display', serif;
+            font-size: 2rem;
+            font-weight: bold;
+            color: #FFD700;
+        }
+        .button-container {
+            display: flex;
+            justify-content: center;
+            gap: 200px;
+            margin-top: 10px;
+        }
+
+        .button-container1 {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-right: 10px;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .styled-button1 {
+            margin: 5px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .styled-button {
+            padding: 10px 20px;
+            font-size: 16px;
+            font-family: 'Playfair Display', serif;
+            color: #fff;
+            background-color: #000;
+            border: 2px solid #000;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: background-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .styled-button:hover {
+            background-color: #000;
+            color: #FFD700;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .styled-button:active {
+            background-color: #333;
+            color: #FFD700;
+        }
+
+
+        body {
+            height: 100vh;
+            background: #eee;
+        }
+
+        .container {
+            width: 100%;
+            background: white;
+        }
+
+        .clicked {
+            stroke-width: 1;
+            stroke: gray;
+            r: 6;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: white;
+            border: 1px solid black;
+            padding: 5px;
+            display: none;
+            pointer-events: none;
+            opacity: 1.0;
+        }
+
+        .popup {
+            display: none;
+            position: absolute;
+            background-color: white;
+            border: 1px solid black;
+            padding: 10px;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.5);
+            pointer-events: auto;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        circle {
+            fill: black;
+        }
+
+        circle.clicked {
+            fill: red;
+        }
+
+        #prevButton,
+        #nextButton,
+        #startButton,
+        #endButton {
+            display: inline;
+            cursor: pointer;
+            font-size: 24px;
+            background: none;
+            border: none;
+            margin: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <nav class="container-fluid navbar navbar-dark bg-dark">
+            <div class="container-fluid d-flex justify-content-center">
+                <span class="navbar-brand mb-0 h1">IMDB Top 1000 Movies Visualization</span>
+            </div>
+        </nav>
+
+    </header>
+
+    <main class="container-fluid">
+        <div class="button-container text-center">
+            <button id="barChartButton" class="styled-button">Bar Chart</button>
+            <button id="lineChartButton" class="styled-button">Line Chart</button>
+            <button id="pieChartButton" class="styled-button">Pie Chart</button>
+        </div>
+
+
+        <div class="button-container1">
+            <button id="startButton" class="styled-button1">|&lt;</button>
+            <button id="prevButton" class="styled-button1">&lt;</button>
+            <button id="nextButton" class="styled-button1">&gt;</button>
+            <button id="endButton" class="styled-button1">&gt;|</button>
+        </div>
+
+        <svg width="2000" height="1000" id="svg"></svg>
+
+
+        <div id="popup" class="popup"></div>
+        <div id="tooltip" class="tooltip"></div>
+    </main>
+
+    <script>
+        let svg;
+        let container;
+        let xAxis;
+        let yAxis;
+
+        let width = 1000,
+            height = 800;
+        let margin = {
+            top: 50,
+            right: 100,
+            bottom: 100,
+            left: 100
+        };
+        let data;
+        let xScale, yScale;
+
+
+        // 산점도
+        // container.selectAll("circle") // container 내 모든 circle 요소 선택
+        //     .data(data)
+        //     .join("circle")
+        //     .transition()
+        //     .attr("cx", d => xScale(d.Released_Year))
+        //     .attr("cy", d => yScale(d.IMDB_Rating))
+        //     .attr("r", 3)
+        //     .on("click", function(event, d) {
+        //         console.log(d);
+        //         const circle = d3.select(this);
+        //         const clicked = circle.classed("clicked");
+        //         circle.classed("clicked", !clicked);
+        //     });
+
+        function getData() {
+            data = d3.csvParse(datastring);
+            data.forEach(d => {
+                d["Runtime"] = +d["Runtime"].replace(" min", ""); // min 떼고 정수로 고침
+                d["Released_Year"] = +d["Released_Year"];
+                d["IMDB_Rating"] = +d["IMDB_Rating"];
+            });
+            data = data.filter(d => !isNaN(d["Released_Year"])); // 1920 - 2020, 7.6 - 9.3
+            return data
+        }
+
+        function clearChart() {
+            d3.select("#svg").selectAll("*").remove();
+        }
+
+        function drawLineChart(data) {
+            clearChart();
+
+            d3.select("#prevButton").style("display", "none");
+            d3.select("#nextButton").style("display", "none");
+            d3.select("#startButton").style("display", "none");
+            d3.select("#endButton").style("display", "none");
+
+
+            let moviesByYear = d3.rollup(data, v => ({
+                count: v.length,
+                movies: v
+            }), d => d.Released_Year);
+
+            let moviesCountByYear = Array.from(moviesByYear, ([year, values]) => ({
+                year: year,
+                count: values.count,
+                movies: values.movies
+            })).sort((a, b) => a.year - b.year);
+
+            svg = d3.select("#svg"); // 전체 SVG 선택
+            container = svg.append("g"); // <g> 요소 추가해서 container로 지정
+            xAxis = svg.append("g");
+            yAxis = svg.append("g");
+            legend = svg.append("g");
+
+            svg
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom);
+            container.attr("transform", `translate(${margin.left}, ${margin.top})`);
+
+            xScale = d3.scaleLinear().domain([d3.min(data, d => d.Released_Year), d3.max(data, d => d.Released_Year)])
+                .range([0, width]).nice()
+            yScale = d3.scaleLinear().domain([0, d3.max(moviesCountByYear, d => d.count)]).range([height, 0]).nice()
+            let line = d3.line().x(d => xScale(d.year)).y(d => yScale(d.count));
+
+            svg.append("text")
+                .attr("x", (width + margin.left + margin.right) / 2)
+                .attr("y", margin.top / 2 + 60)
+                .attr("text-anchor", "middle")
+                .style("font-size", "24px")
+                .style("font-family", "Times New Roman, serif")
+                .style("font-weight", "bold")
+                .text("Number of Movies Selected for IMDB Top 1000 by Year");
+
+            xAxis
+                .attr("transform", `translate(${margin.left}, ${margin.top + height})`)
+                .transition()
+                .call(d3.axisBottom(xScale));
+
+            yAxis
+                .attr("transform", `translate(${margin.left}, ${margin.top})`)
+                .transition()
+                .call(d3.axisLeft(yScale));
+
+            container.append("path")
+                .datum(moviesCountByYear)
+                .attr("fill", "none")
+                .attr("stroke", "steelblue")
+                .attr("stroke-width", 2)
+                .attr("d", line);
+
+            container.selectAll("circle")
+                .data(moviesCountByYear)
+                .join("circle")
+                .attr("cx", d => xScale(d.year))
+                .attr("cy", d => yScale(d.count))
+                .attr("r", 3)
+
+                .on("mouseover", function (event, d) {
+                    let tooltip = d3.select("#tooltip");
+                    tooltip.style("display", "block")
+                        .style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY - 10) + "px")
+                        .html(`<strong>Year:</strong> ${d.year}<br><strong>Count:</strong> ${d.count}`);
+                })
+                .on("mouseout", function () {
+                    d3.select("#tooltip").style("display", "none");
+                })
+
+                .on("click", function (event, d) {
+                    d3.select("#tooltip").style("display", "none");
+                    const circle = d3.select(this);
+                    const clicked = circle.classed("clicked");
+                    circle.classed("clicked", !clicked);
+
+                    let popup = d3.select("#popup");
+                    let moviesHtml = d.movies.map(movie =>
+                        `<div style="display: flex; align-items: top; margin-bottom: 10px; font-family: Times New Roman, sans-serif;">
+                        <img src="${movie.Poster_Link}" alt="Poster" style="max-width: 100px; max-height: 150px; margin-right: 10px;">
+                            <div>
+                                <strong>Title:</strong> ${movie.Series_Title}<br>
+                                <strong>Year:</strong> ${movie.Released_Year}<br>
+                                <strong>Rating:</strong> ${movie.IMDB_Rating}<br>
+                            </div>
+                        </div>`
+                    ).join("");
+                    popup.style("display", clicked ? "none" : "block")
+                        .html(moviesHtml);
+
+                    if (!clicked) {
+                        Popper.createPopper(event.target, popup.node(), {
+                            placement: 'top',
+                            modifiers: [{
+                                name: 'offset',
+                                options: {
+                                    offset: [0, 8],
+                                },
+                            },
+                            {
+                                name: 'preventOverflow',
+                                options: {
+                                    boundary: 'viewport',
+                                },
+                            }
+                            ],
+                        });
+                    }
+
+                    d3.selectAll("circle").classed("clicked", function () {
+                        return this === circle.node() ? !clicked : false;
+                    });
+                });
+
+            d3.select("body").on("click", function (event) {
+                if (!event.target.closest("circle")) {
+                    d3.select("#popup").style("display", "none");
+                    d3.selectAll("circle").classed("clicked", false);
+                }
+            });
+
+            xAxis
+                .attr("transform", `translate(${margin.left}, ${margin.top + height})`)
+                .transition()
+                .call(d3.axisBottom(xScale));
+
+            yAxis
+                .attr("transform", `translate(${margin.left}, ${margin.top})`)
+                .transition()
+                .call(d3.axisLeft(yScale));
+
+        }
+
+        function drawPieChart(data, currentPage) {
+            clearChart();
+
+            d3.select("#prevButton").style("display", "inline");
+            d3.select("#nextButton").style("display", "inline");
+            d3.select("#startButton").style("display", "inline");
+            d3.select("#endButton").style("display", "inline");
+
+            let moviesByDirector = d3.rollup(data, v => ({
+                count: v.length,
+                movies: v
+            }), d => d.Director);
+
+            let topDirectors = Array.from(moviesByDirector, ([director, values]) => ({
+                director,
+                count: values.count,
+                movies: values.movies
+            })).sort((a, b) => b.count - a.count);
+
+            let start = currentPage * 10;
+            let end = start + 10;
+            let pageData = topDirectors.slice(start, end);
+
+
+            let pieData = pageData.map(d => ({
+                label: d.director,
+                value: d.count,
+                movies: d.movies
+            }));
+
+            svg = d3.select("#svg");
+            container = svg.append("g");
+            xAxis = svg.append("g");
+            yAxis = svg.append("g");
+            legend = svg.append("g");
+
+            svg
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+            container.attr("transform", `translate(${width / 2 + margin.left}, ${height / 2 + margin.top + 50})`);
+
+            const title = svg.append("text")
+                .attr("x", (width + margin.left + margin.right) / 2)
+                .attr("y", margin.top / 2)
+                .attr("text-anchor", "middle")
+                .style("font-size", "24px")
+                .style("font-family", "Times New Roman, serif")
+                .style("font-weight", "bold")
+                .text("Directors Sorted by Number of Movies Listed on IMDB Top 1000");
+
+            let pie = d3.pie().value(d => d.value);
+            let arc = d3.arc().innerRadius(0).outerRadius(Math.min(width, height) / 2 - 1);
+
+            let arcs = container.selectAll("arc")
+                .data(pie(pieData))
+                .join("g")
+                .attr("class", "arc");
+
+            arcs.append("path")
+                .attr("d", arc)
+                .attr("fill", (d, i) => d3.schemeCategory10[i % 10])
+                .on("mouseover", function (event, d) {
+                    if (d3.select("#popup").style("display") === "block") return;
+                    let tooltip = d3.select("#tooltip");
+                    tooltip.style("display", "block")
+                        .style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY - 10) + "px")
+                        .style("background", "#fff")
+                        .style("border", "1px solid #ccc")
+                        .style("padding", "10px")
+                        .html(
+                            `<strong>Director:</strong> ${d.data.label}<br><strong>Movies:</strong> ${d.data.value}`
+                        );
+                })
+                .on("mouseout", function () {
+                    d3.select("#tooltip").style("display", "none");
+                })
+                .on("click", function (event, d) {
+                    d3.select("#tooltip").style("display", "none");
+
+                    const arc = d3.select(this);
+                    const clicked = arc.classed("clicked");
+                    arc.classed("clicked", !clicked);
+
+                    let popup = d3.select("#popup");
+                    let moviesHtml = d.data.movies.map(movie =>
+                        `<div style="display: flex; align-items: top; margin-bottom: 10px; font-family: Times New Roman, sans-serif;">
+                            <img src="${movie.Poster_Link}" alt="Poster" style="max-width: 100px; max-height: 150px; margin-right: 10px;">
+                            <div>
+                                <strong>Title:</strong> ${movie.Series_Title}<br>
+                                <strong>Year:</strong> ${movie.Released_Year}<br>
+                                <strong>Rating:</strong> ${movie.IMDB_Rating}<br>
+                            </div>
+                        </div>`
+                    ).join("");
+
+                    popup.style("display", clicked ? "none" : "block")
+                        .html(moviesHtml);
+
+                    if (!clicked) {
+                        Popper.createPopper(event.target, popup.node(), {
+                            placement: 'right',
+                            modifiers: [{
+                                name: 'offset',
+                                options: {
+                                    offset: [0, 8],
+                                },
+                            },
+                            {
+                                name: 'preventOverflow',
+                                options: {
+                                    boundary: 'viewport',
+                                },
+                            }
+                            ],
+                        });
+                    }
+
+                    d3.selectAll("g.arc").classed("clicked", function () {
+                        return this === arc.node() ? !clicked : false;
+                    });
+                });
+
+            d3.select("body").on("click", function (event) {
+                if (!event.target.closest("g.arc")) {
+                    d3.select("#popup").style("display", "none");
+                }
+            });
+
+            arcs.append("text")
+                .attr("transform", d => {
+                    let [x, y] = arc.centroid(d);
+                    x *= 1.4;
+                    y *= 1.4;
+                    return `translate(${x}, ${y})`;
+                })
+                .attr("text-anchor", "middle")
+                .attr("dy", "0.35em")
+                .style("font-weight", "bold")
+                .style("font-size", "15px")
+                .style("font-family", "'Playfair Display', serif")
+                .text(d => d.data.label);
+        }
+
+        function drawBarChart(data, currentPage) {
+            clearChart();
+
+            d3.select("#prevButton").style("display", "inline");
+            d3.select("#nextButton").style("display", "inline");
+            d3.select("#startButton").style("display", "inline");
+            d3.select("#endButton").style("display", "inline");
+
+            data = data.sort((a, b) => b.IMDB_Rating - a.IMDB_Rating)
+
+            svg = d3.select("#svg");
+            container = svg.append("g");
+            xAxis = svg.append("g");
+            yAxis = svg.append("g");
+
+            svg
+                .attr("width", width + margin.left + margin.right + 300)
+                .attr("height", height + margin.top + margin.bottom);
+
+            container.attr("transform", `translate(${margin.left + 300}, ${margin.top})`);
+
+
+            svg.append("text")
+                .attr("x", (width + margin.left + margin.right) / 2 + 150)
+                .attr("y", margin.top / 2)
+                .attr("text-anchor", "middle")
+                .style("font-size", "24px")
+                .style("font-family", "Times New Roman, serif")
+                .style("font-weight", "bold")
+                .text("IMDB Top 1000 Movies Sorted by Rating");
+
+            let start = currentPage * 10;
+            let end = start + 10;
+            let pageData = data.slice(start, end);
+
+            xScale = d3.scaleLinear()
+                .domain([0, d3.max(data, d => d.IMDB_Rating)])
+                .range([0, width])
+                .nice();
+
+            yScale = d3.scaleBand()
+                .domain(pageData.map(d => d.Series_Title))
+                .range([0, height])
+                .padding(0.1);
+
+            xAxis
+                .attr("transform", `translate(${margin.left + 300}, ${margin.top + height})`)
+                .transition()
+                .call(d3.axisBottom(xScale).ticks(10));
+
+            yAxis
+                .attr("transform", `translate(${margin.left + 300}, ${margin.top})`)
+                .transition()
+                .call(d3.axisLeft(yScale).tickSize(0).tickPadding(10));
+
+            yAxis.selectAll(".tick text")
+                .style("font-size", "14px")
+                .style("font-weight", "bold")
+                .style("font-family", "Times New Roman, serif");
+
+            const colorScale = d3.scaleSequential(d3.interpolateGreys).domain([7, d3.max(data, d => d.IMDB_Rating)]);
+
+            container.selectAll(".bar")
+                .data(pageData)
+                .join("rect")
+                .attr("class", "bar")
+                .attr("x", 0)
+                .attr("y", d => yScale(d.Series_Title))
+                .attr("width", d => xScale(d.IMDB_Rating))
+                .attr("height", yScale.bandwidth())
+                .attr("fill", d => colorScale(d.IMDB_Rating))
+                .on("mouseover", function (event, d) {
+                    let tooltip = d3.select("#tooltip");
+                    tooltip.style("display", "block")
+                        .style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY - 10) + "px")
+                        .html(`<strong>Title:</strong> ${d.Series_Title}<br><strong>Rating:</strong> ${d.IMDB_Rating}`);
+                })
+                .on("mouseout", function () {
+                    d3.select("#tooltip").style("display", "none");
+                })
+                .on("click", function (event, d) {
+                    d3.select("#tooltip").style("display", "none");
+
+                    const bar = d3.select(this);
+                    const clicked = bar.classed("clicked");
+                    bar.classed("clicked", !clicked);
+
+                    let popup = d3.select("#popup");
+                    let movieHtml = `
+            <div style="display: flex; align-items: top; margin-bottom: 10px; font-family: Times New Roman, sans-serif;">
+                <img src="${d.Poster_Link}" alt="Poster" style="max-width: 100px; max-height: 150px; margin-right: 10px;">
+                <div>
+                    <strong>Title:</strong> ${d.Series_Title}<br>
+                    <strong>Director:</strong> ${d.Director}<br>
+                    <strong>Released Year:</strong> ${d.Released_Year}<br>
+                    <strong>Runtime:</strong> ${d.Runtime}<br>
+                    <strong>Genre:</strong> ${d.Genre}<br>
+                    <strong>Summary:</strong> ${d.Overview}<br>
+                </div>
+            </div>`;
+
+                    popup.style("display", clicked ? "none" : "block")
+                        .html(movieHtml);
+
+                    if (!clicked) {
+                        Popper.createPopper(event.target, popup.node(), {
+                            placement: 'top',
+                            modifiers: [{
+                                name: 'offset',
+                                options: {
+                                    offset: [0, 8],
+                                },
+                            },
+                            {
+                                name: 'preventOverflow',
+                                options: {
+                                    boundary: 'viewport',
+                                },
+                            }]
+                        });
+                    }
+
+                    d3.selectAll("rect.bar").classed("clicked", function () {
+                        return this === bar.node() ? !clicked : false;
+                    });
+                });
+
+            d3.select("body").on("click", function (event) {
+                if (!event.target.closest("rect.bar")) {
+                    d3.select("#popup").style("display", "none");
+                }
+            });
+        }
+
+        data = getData();
+        currentChartType = "bar"
+        drawBarChart(data, 0);
+
+        document.addEventListener('DOMContentLoaded', () => {
+            currentPage = 0;
+            d3.select("#lineChartButton").on("click", () => {
+                currentPage = 0;
+                currentChartType = "line"
+                drawLineChart(data);
+            });
+
+            d3.select("#barChartButton").on("click", () => {
+                currentPage = 0;
+                currentChartType = "bar"
+                drawBarChart(data, currentPage);
+            });
+
+            d3.select("#pieChartButton").on("click", () => {
+                currentPage = 0;
+                currentChartType = "pie"
+                drawPieChart(data, currentPage);
+            });
+
+            d3.select("#nextButton").on("click", () => {
+                if ((currentPage + 1) * 10 < data.length) {
+                    currentPage++;
+                    if (currentChartType === "bar") {
+                        drawBarChart(data, currentPage);
+                    } else if (currentChartType === "pie") {
+                        drawPieChart(data, currentPage);
+                    }
+                }
+            });
+
+            d3.select("#prevButton").on("click", () => {
+                if (currentPage > 0) {
+                    currentPage--;
+                    if (currentChartType === "bar") {
+                        drawBarChart(data, currentPage);
+                    } else if (currentChartType === "pie") {
+                        drawPieChart(data, currentPage);
+                    }
+                }
+            });
+            d3.select("#startButton").on("click", () => {
+                currentPage = 0;
+                if (currentChartType === "bar") {
+                    drawBarChart(data, currentPage);
+                } else if (currentChartType === "pie") {
+                    drawPieChart(data, currentPage);
+                }
+            });
+
+            d3.select("#endButton").on("click", () => {
+                currentPage = Math.floor(data.length / 10);
+                if (currentChartType === "bar") {
+                    drawBarChart(data, currentPage);
+                } else if (currentChartType === "pie") {
+                    let moviesByDirector = d3.rollup(data, v => ({
+                        count: v.length
+                    }), d => d.Director);
+
+                    let topDirectors = Array.from(moviesByDirector, ([director, values]) => ({
+                        director,
+                        count: values.count
+                    }));
+                    currentPage = Math.floor(topDirectors.length / 10)
+                    drawPieChart(data, currentPage);
+                }
+            });
+        });
+
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous">
+        </script>
+</body>
+
+</html>
